@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from random import Random
 from statistics import mean
 from typing import Any
@@ -96,17 +96,37 @@ class World:
             if a.cash<=0:self._die(a)
         capacity=max(0,self.max_population-len(self.living))
         candidates=list(self.living);self.rng.shuffle(candidates)
-        for p in candidates:
+        for initiator in candidates:
             if capacity<=0:break
-            g=p.genome; rt=max(2.,g.reproduction_threshold/self.price*.35)
-            if p.cash>=g.reproduction_threshold and p.resource>=rt and self.rng.random()<g.reproduction_probability:
-                ci=p.cash*g.offspring_investment;ri=p.resource*g.offspring_investment
-                if ci<5 or ri<1:continue
-                p.cash-=ci;p.resource-=ri
-                child=Agent(self.next_id,ci,ri,g.mutate(self.rng),p.id,p.generation+1,self.tick)
-                p.children+=1;self.next_id+=1;self.population.append(child);self.births+=1;capacity-=1
-                self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
-                            genes=asdict(child.genome),investment={"cash":round(ci,3),"resource":round(ri,3)})
+            g=initiator.genome
+            if self.rng.random()>=g.reproduction_probability:continue
+            wanted=max(1,min(g.partner_count,len(self.living)))
+            pool=[x for x in self.living if x.id!=initiator.id]
+            self.rng.shuffle(pool)
+            # Selectivity is genetic: high values favor resource-rich partners; low values retain randomness.
+            pool.sort(key=lambda x:g.partner_selectivity*(x.cash+x.resource*self.price)+
+                      (1-g.partner_selectivity)*self.rng.random()*200,reverse=True)
+            parents=[initiator]+pool[:wanted-1]
+            if len(parents)<wanted:continue
+            if any(x.cash<g.reproduction_threshold/wanted for x in parents):continue
+            n=min(g.offspring_count,capacity)
+            cash_parts=[x.cash*g.offspring_investment for x in parents]
+            res_parts=[x.resource*g.offspring_investment for x in parents]
+            cash_pool=sum(cash_parts);res_pool=sum(res_parts)
+            if cash_pool/n<5 or res_pool/n<1:continue
+            for x,ci,ri in zip(parents,cash_parts,res_parts):
+                x.cash-=ci;x.resource-=ri
+            for _ in range(n):
+                child_genome=Genome.recombine([x.genome for x in parents],self.rng,g.gene_mix_bias)
+                child=Agent(self.next_id,cash_pool/n,res_pool/n,child_genome,initiator.id,
+                            max(x.generation for x in parents)+1,self.tick)
+                for x in parents:x.children+=1
+                self.next_id+=1;self.population.append(child);self.births+=1;capacity-=1
+                self._event("birth",agent=child.id,parent=initiator.id,
+                    parents=[x.id for x in parents],generation=child.generation,
+                    mode=("clone" if wanted==1 else f"{wanted}-parent"),
+                    genes=asdict(child.genome),
+                    investment={"cash":round(cash_pool/n,3),"resource":round(res_pool/n,3)})
         self.tick+=1;self._record()
 
     def run(self,ticks:int):
