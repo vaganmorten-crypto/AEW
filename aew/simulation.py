@@ -73,7 +73,7 @@ class World:
 
     def step(self) -> None:
         living=self.living
-        if len(living)<2:
+        if not living:
             self.tick+=1; self._record(); return
         scarcity=max(.2,1.0-len(living)/1000.0)
         self.price=max(.5,self.price*(1.0+self.rng.gauss(0,.015)+(1-scarcity)*.002))
