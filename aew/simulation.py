@@ -22,9 +22,9 @@ class Genome:
         return cls(
             risk=rng.uniform(.05,.95),
             trade_rate=rng.uniform(.05,.95),
-            reproduction_threshold=rng.uniform(130.0,230.0),
-            reproduction_probability=rng.uniform(.01,.08),
-            offspring_investment=rng.uniform(.12,.35),
+            reproduction_threshold=rng.uniform(45.0,180.0),
+            reproduction_probability=rng.uniform(.01,.25),
+            offspring_investment=rng.uniform(.08,.40),
             resource_consumption=rng.uniform(.55,1.35),
             mutation_rate=rng.uniform(.03,.12),
         )
@@ -34,9 +34,9 @@ class Genome:
         return Genome(
             risk=clamp(self.risk+rng.gauss(0,r),.01,.99),
             trade_rate=clamp(self.trade_rate+rng.gauss(0,r),.01,.99),
-            reproduction_threshold=clamp(self.reproduction_threshold*(1+rng.gauss(0,r)),60.0,400.0),
-            reproduction_probability=clamp(self.reproduction_probability*(1+rng.gauss(0,r)),.001,.35),
-            offspring_investment=clamp(self.offspring_investment+rng.gauss(0,r*.25),.05,.60),
+            reproduction_threshold=clamp(self.reproduction_threshold*(1+rng.gauss(0,r)),25.0,400.0),
+            reproduction_probability=clamp(self.reproduction_probability*(1+rng.gauss(0,r)),.001,.60),
+            offspring_investment=clamp(self.offspring_investment+rng.gauss(0,r*.25),.04,.70),
             resource_consumption=clamp(self.resource_consumption*(1+rng.gauss(0,r*.5)),.25,2.0),
             mutation_rate=clamp(self.mutation_rate+rng.gauss(0,.01),.005,.25),
         )
@@ -97,7 +97,7 @@ class World:
         for p in candidates[:capacity]:
             g=p.genome
             threshold=g.reproduction_threshold
-            resource_threshold=max(2.0,threshold/self.price*.55)
+            resource_threshold=max(1.0,threshold/self.price*.20)
             if p.cash>=threshold and p.resource>=resource_threshold and self.rng.random()<g.reproduction_probability:
                 cash_invest=p.cash*g.offspring_investment
                 resource_invest=p.resource*g.offspring_investment
@@ -118,7 +118,7 @@ class World:
         self.history.append({"tick":self.tick,"population":len(living),"price":round(self.price,4),
           "mean_cash":round(mean([a.cash for a in living]),4) if living else 0.0,
           "mean_risk":round(mean([a.risk for a in living]),4) if living else 0.0,
-          "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
+          "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0,\n          "max_generation":max([a.generation for a in living], default=-1),\n          "births":sum(1 for a in self.population if a.parent is not None)})
 
     def snapshot(self)->dict[str,Any]:
         return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
