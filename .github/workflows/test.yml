@@ -12,5 +12,14 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q
-      - run: python -m aew run --ticks 50 --agents 30 --seed 42 --out /tmp/aew.json
-      - run: python -m aew dashboard /tmp/aew.json --out /tmp/aew.png
+      - name: Long evolution smoke test
+        run: |
+          python -m aew run --ticks 10000 --agents 60 --seed 42 --out /tmp/aew-long.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/aew-long.json"))
+          print("tick",d["tick"],"births",d["births"],"deaths",d["deaths"],"max_generation",d["max_generation"])
+          assert d["births"] > 0
+          assert d["max_generation"] >= 1
+          PY
+      - run: python -m aew dashboard /tmp/aew-long.json --out /tmp/aew.png
