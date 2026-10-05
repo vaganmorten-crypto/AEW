@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aew"
+version = "0.2.1"
+description = "Artificial Economic World: a safe closed artificial-life economic simulation"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Morten Vågan"}]
+
+[tool.setuptools.packages.find]
+include = ["aew*"]
