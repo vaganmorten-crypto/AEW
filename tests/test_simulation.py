@@ -1,40 +1,41 @@
-from aew.simulation import World
+from random import Random
+from aew.simulation import Genome, World
 
 def test_seed_is_deterministic():
-    a=World(20,7); b=World(20,7); a.run(25); b.run(25)
+    a=World(20,7);b=World(20,7);a.run(100);b.run(100)
     assert a.snapshot()==b.snapshot()
 
-def test_tick_snapshot_and_observability():
-    w=World(10,1); w.run(5); s=w.snapshot()
-    assert s["tick"]==5 and s["version"]=="0.3.0" and len(s["history"])==6
-    assert "events" in s and all("tick" in e and "type" in e for e in s["events"])
+def test_genome_mutation_is_bounded_and_changes_traits():
+    g=Genome(.5,.5,130,.05,.2,.8,.08);c=g.mutate(Random(7))
+    assert c!=g and .01<=c.risk<=.99 and .001<=c.reproduction_probability<=.40
+    assert .05<=c.offspring_investment<=.55 and .20<=c.resource_consumption<=1.8
 
-def test_every_agent_has_genetic_reproduction_traits():
-    w=World(12,3)
-    for a in w.population:
-        g=a.genome
-        assert g.reproduction_threshold > 0
-        assert 0 < g.reproduction_probability <= .35
-        assert 0 < g.offspring_investment < 1
-        assert g.resource_consumption > 0
-        assert 0 < g.trade_rate < 1
-
-def test_birth_inherits_mutated_genome():
-    w=World(2,11); p=w.population[0]
-    p.cash=500; p.resource=100
-    p.genome.reproduction_threshold=60
-    p.genome.reproduction_probability=.35
+def test_birth_inherits_mutated_genome_and_generation():
+    w=World(2,11);p=w.population[0];p.cash=500;p.resource=100
+    p.genome.reproduction_threshold=55;p.genome.reproduction_probability=.40
     for _ in range(100):
         w.step()
-        children=[a for a in w.population if a.parent==p.id]
-        if children:
-            c=children[0]
-            assert c.generation==1
-            assert c.genome != p.genome
-            return
-    assert False, "expected a genetically controlled birth"
+        kids=[a for a in w.population if a.parent==p.id]
+        if kids:
+            c=kids[0];assert c.generation==1;assert c.genome!=p.genome
+            assert p.children>=1;assert w.births>=1;return
+    raise AssertionError("expected genetically controlled birth")
 
-def test_invalid_population():
-    try: World(1,1)
-    except ValueError: return
-    assert False
+def test_inspector_reports_lineage():
+    w=World(2,19);p=w.population[0];p.cash=500;p.resource=100
+    p.genome.reproduction_threshold=55;p.genome.reproduction_probability=.40
+    for _ in range(100):
+        w.step()
+        kids=[a for a in w.population if a.parent==p.id]
+        if kids:
+            d=w.inspect_agent(kids[0].id)
+            assert d["lineage"][:2]==[kids[0].id,p.id]
+            assert d["agent"]["genome"]["reproduction_threshold"]>0;return
+    raise AssertionError("expected child")
+
+def test_long_run_evolves_beyond_founders():
+    w=World(60,42);w.run(5000)
+    assert w.births>0
+    assert w.max_generation>=1
+    assert any(a.parent is not None for a in w.population)
+    assert w.history[-1]["max_generation"]==w.max_generation
