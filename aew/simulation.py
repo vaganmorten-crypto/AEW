@@ -118,7 +118,9 @@ class World:
         self.history.append({"tick":self.tick,"population":len(living),"price":round(self.price,4),
           "mean_cash":round(mean([a.cash for a in living]),4) if living else 0.0,
           "mean_risk":round(mean([a.risk for a in living]),4) if living else 0.0,
-          "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0,\n          "max_generation":max([a.generation for a in living], default=-1),\n          "births":sum(1 for a in self.population if a.parent is not None)})
+          "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0,
+          "max_generation":max([a.generation for a in living], default=-1),
+          "births":sum(1 for a in self.population if a.parent is not None)})
 
     def snapshot(self)->dict[str,Any]:
         return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
