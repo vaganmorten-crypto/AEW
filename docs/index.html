@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AEW 0.3.0 Observatory</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif}body{margin:0;background:#0b1020;color:#eaf0ff}.wrap{max-width:1100px;margin:auto;padding:16px}
+h1{font-size:1.35rem;margin:4px 0}.sub{color:#9fb0d0;margin:0 0 14px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{background:#151d33;border:1px solid #273455;border-radius:14px;padding:12px}.big{font-size:1.55rem;font-weight:700}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}button,select,input{background:#202d4d;color:#fff;border:1px solid #40527e;border-radius:10px;padding:10px 13px}input{max-width:130px}
+canvas{width:100%;height:210px;background:#0f1729;border-radius:10px}table{width:100%;border-collapse:collapse;font-size:.85rem}th,td{text-align:right;padding:7px;border-bottom:1px solid #273455}th:first-child,td:first-child{text-align:left}
+.log{height:260px;overflow:auto;font-family:ui-monospace,monospace;font-size:.78rem}.event{padding:5px 0;border-bottom:1px solid #202a45}.two{display:grid;grid-template-columns:1.2fr .8fr;gap:10px;margin-top:10px}
+@media(max-width:700px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.wrap{padding:10px}}
+</style></head><body><div class="wrap">
+<h1>AEW 0.3.0 — Observatory</h1><p class="sub">Sandboxed artificial economy · runs locally in this browser · no real money or external trading</p>
+<div class="grid"><div class="card">Tick<div class="big" id="tick">0</div></div><div class="card">Living agents<div class="big" id="pop">0</div></div><div class="card">Virtual price<div class="big" id="price">0</div></div><div class="card">Events<div class="big" id="ec">0</div></div></div>
+<div class="controls"><button id="play">▶ Run</button><button id="step">Step</button><button id="reset">Reset</button><select id="speed"><option value="1">1×</option><option value="10">10×</option><option value="100">100×</option></select></div>
+<div class="two"><div class="card"><b>Population & virtual price</b><canvas id="chart" width="800" height="260"></canvas></div><div class="card"><b>Live event stream</b><div id="log" class="log"></div></div></div>
+<div class="card" style="margin-top:10px"><b>Top living agents — tap a row to inspect</b><div style="overflow:auto"><table><thead><tr><th>Agent</th><th>Cash</th><th>Resource</th><th>Risk gene</th><th>Gen</th></tr></thead><tbody id="agents"></tbody></table></div></div>
+<div class="card" style="margin-top:10px"><b>Agent inspector</b>
+<div class="controls"><label for="inspectId">Agent ID</label><input id="inspectId" inputmode="numeric" placeholder="e.g. 52"><button id="inspectBtn">Inspect</button></div>
+<div id="detail" class="sub">Tap a living agent above, or enter any agent ID (living or dead).</div></div>
+</div><script>
+let seed=42,state,run=false,timer;function rnd(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
+function gauss(){let u=1-rnd(),v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function reset(){seed=42;state={tick:0,price:10,next:60,agents:[],events:[],hist:[]};for(let i=0;i<60;i++)state.agents.push({id:i,cash:100,res:10,risk:.05+.9*rnd(),parent:null,gen:0,born:0,alive:true});record();render()}
+function living(){return state.agents.filter(a=>a.alive)} function ev(type,x){state.events.push({tick:state.tick,type,...x});if(state.events.length>500)state.events.shift()}
+function step(){let L=living();if(L.length<2){state.tick++;record();return}let scarcity=Math.max(.2,1-L.length/1000);state.price=Math.max(.5,state.price*(1+gauss()*.015+(1-scarcity)*.002));L.sort(()=>rnd()-.5);
+for(let i=0;i+1<L.length;i+=2){let b=L[i],s=L[i+1],q=Math.min(s.res,Math.max(0,b.risk*rnd()*2)),c=q*state.price;if(q>0&&c<=b.cash){b.cash-=c;b.res+=q;s.cash+=c;s.res-=q;ev("trade",{buyer:b.id,seller:s.id,qty:q})}}
+for(const a of L){a.res+=rnd()*1.5*scarcity-(.7+.6*a.risk);a.cash-=.08;if(a.res<0){a.cash+=a.res*state.price;a.res=0}if(a.cash<=0){a.alive=false;ev("bankruptcy",{agent:a.id})}}
+for(const p of living().filter(a=>a.cash>180&&a.res>12).slice(0,Math.max(0,200-living().length))){if(rnd()<.03){p.cash-=40;p.res-=3;let c={id:state.next++,cash:40,res:3,risk:Math.min(1,Math.max(0,p.risk+gauss()*.05)),parent:p.id,gen:p.gen+1,born:state.tick,alive:true};state.agents.push(c);ev("birth",{agent:c.id,parent:p.id})}}
+state.tick++;record()}
+function record(){let L=living(),avg=k=>L.length?L.reduce((s,a)=>s+a[k],0)/L.length:0;state.hist.push({tick:state.tick,pop:L.length,price:state.price,cash:avg("cash"),risk:avg("risk")});if(state.hist.length>300)state.hist.shift()}
+function draw(){let c=document.getElementById("chart"),x=c.getContext("2d"),h=state.hist;if(!h.length)return;x.clearRect(0,0,c.width,c.height);let maxP=Math.max(...h.map(v=>v.pop),1),maxR=Math.max(...h.map(v=>v.price),1);function line(key,max){x.beginPath();h.forEach((v,i)=>{let X=i/(Math.max(1,h.length-1))*(c.width-20)+10,Y=c.height-10-v[key]/max*(c.height-20);i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke()}x.strokeStyle="#69d2ff";line("pop",maxP);x.strokeStyle="#ffd166";line("price",maxR)}
+function render(){let L=living();tick.textContent=state.tick;pop.textContent=L.length;price.textContent=state.price.toFixed(2);ec.textContent=state.events.length;agents.innerHTML=L.sort((a,b)=>b.cash-a.cash).slice(0,20).map(a=>`<tr data-id="${a.id}"><td>#${a.id}</td><td>${a.cash.toFixed(1)}</td><td>${a.res.toFixed(1)}</td><td>${a.risk.toFixed(2)}</td><td>${a.gen}</td></tr>`).join("");log.innerHTML=state.events.slice(-80).reverse().map(e=>`<div class=event>T${e.tick} · ${e.type} · ${JSON.stringify(e).replace(/^.*?"type":"[^"]+",?/,"")}</div>`).join("");draw()}
+function loop(){if(!run)return;for(let i=0;i<+speed.value;i++)step();render();timer=setTimeout(loop,180)}
+play.onclick=()=>{run=!run;play.textContent=run?"⏸ Pause":"▶ Run";if(run)loop()};document.getElementById("step").onclick=()=>{step();render()};document.getElementById("reset").onclick=()=>{run=false;play.textContent="▶ Run";reset()};
+function inspectAgent(id){let a=state.agents.find(x=>x.id==id);if(!a){detail.textContent="Agent not found.";return}let chain=[],p=a;while(p){chain.push("#"+p.id);p=state.agents.find(x=>x.id===p.parent)}let kids=state.agents.filter(x=>x.parent===a.id).map(x=>"#"+x.id);let acts=state.events.filter(e=>e.agent===a.id||e.buyer===a.id||e.seller===a.id||e.parent===a.id).slice(-8).reverse();let role=e=>e.type==="trade"?(e.buyer===a.id?"bought":"sold"):e.type;detail.innerHTML=`<div><strong>Agent #${a.id}</strong> · ${a.alive?"alive":"dead"} · generation ${a.gen} · age ${state.tick-(a.born||0)} ticks</div><div>Cash: ${a.cash.toFixed(2)} · resource: ${a.res.toFixed(2)}</div><div><strong>Genome</strong>: risk=${a.risk.toFixed(4)} <span style="color:#9fb0d0">(currently the inherited/mutating gene)</span></div><div>Parent: ${a.parent===null?"founder":"#"+a.parent} · children: ${kids.length?kids.join(", "):"none"}</div><div>Lineage: ${chain.join(" ← ")}</div><div style="margin-top:8px"><strong>Recent actions</strong>: ${acts.length?acts.map(e=>"T"+e.tick+" "+role(e)).join(" · "):"none recorded"}</div>`;inspectId.value=a.id}
+agents.onclick=e=>{let tr=e.target.closest("tr");if(tr)inspectAgent(tr.dataset.id)};inspectBtn.onclick=()=>inspectAgent(inspectId.value);inspectId.onkeydown=e=>{if(e.key==="Enter")inspectAgent(inspectId.value)};reset();
+</script></body></html>
