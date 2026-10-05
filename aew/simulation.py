@@ -46,10 +46,12 @@ class Genome:
 @dataclass
 class Agent:
     id:int; cash:float; resource:float; genome:Genome
-    parent:int|None=None; generation:int=0; born:int=0; alive:bool=True
+    parents:list[int]|None=None; generation:int=0; born:int=0; alive:bool=True
     children:int=0; trades:int=0; volume:float=0.0; death_tick:int|None=None
     @property
     def risk(self)->float: return self.genome.risk
+    @property
+    def parent(self)->int|None: return self.parents[0] if self.parents else None
 
 class World:
     def __init__(self, agents:int=100, seed:int=42, max_population:int=300):
@@ -118,7 +120,7 @@ class World:
                 x.cash-=ci;x.resource-=ri
             for _ in range(n):
                 child_genome=Genome.recombine([x.genome for x in parents],self.rng,g.gene_mix_bias)
-                child=Agent(self.next_id,cash_pool/n,res_pool/n,child_genome,initiator.id,
+                child=Agent(self.next_id,cash_pool/n,res_pool/n,child_genome,[x.id for x in parents],
                             max(x.generation for x in parents)+1,self.tick)
                 for x in parents:x.children+=1
                 self.next_id+=1;self.population.append(child);self.births+=1;capacity-=1
@@ -144,12 +146,19 @@ class World:
     def inspect_agent(self,agent_id:int)->dict[str,Any]:
         a=next((x for x in self.population if x.id==agent_id),None)
         if a is None:raise KeyError(agent_id)
-        lineage=[];cur=a
-        while cur is not None:
-            lineage.append(cur.id)
-            cur=next((x for x in self.population if x.id==cur.parent),None) if cur.parent is not None else None
+        by_id={x.id:x for x in self.population}
+        ancestors=[];seen=set();frontier=list(a.parents or [])
+        while frontier:
+            pid=frontier.pop(0)
+            if pid in seen:continue
+            seen.add(pid);ancestors.append(pid)
+            p=by_id.get(pid)
+            if p:frontier.extend(p.parents or [])
+        child_ids=[x.id for x in self.population if a.id in (x.parents or [])]
+        birth_event=next((e for e in reversed(self.events) if e.get("type")=="birth" and e.get("agent")==a.id),None)
         return {"agent":asdict(a),"age":(self.tick if a.death_tick is None else a.death_tick)-a.born,
-                "lineage":lineage,"child_ids":[x.id for x in self.population if x.parent==a.id]}
+                "parent_ids":list(a.parents or []),"ancestor_ids":ancestors,"child_ids":child_ids,
+                "birth_event":birth_event}
 
     def snapshot(self)->dict[str,Any]:
         return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
