@@ -16,12 +16,17 @@ class Genome:
     offspring_investment: float
     resource_consumption: float
     mutation_rate: float = 0.08
+    partner_count: int = 1
+    offspring_count: int = 1
+    partner_selectivity: float = 0.5
+    gene_mix_bias: float = 0.5
 
     @classmethod
     def founder(cls, rng: Random) -> "Genome":
         return cls(rng.uniform(.05,.95), rng.uniform(.05,.95), rng.uniform(105,175),
                    rng.uniform(.015,.09), rng.uniform(.12,.32), rng.uniform(.45,1.05),
-                   rng.uniform(.03,.12))
+                   rng.uniform(.03,.12), rng.randint(1,4), rng.randint(1,3),
+                   rng.uniform(0,1), rng.uniform(.15,.85))
 
     def mutate(self, rng: Random) -> "Genome":
         r=self.mutation_rate
@@ -32,7 +37,11 @@ class Genome:
             clamp(self.reproduction_probability*(1+rng.gauss(0,r)),.001,.40),
             clamp(self.offspring_investment+rng.gauss(0,r*.25),.05,.55),
             clamp(self.resource_consumption*(1+rng.gauss(0,r*.5)),.20,1.8),
-            clamp(self.mutation_rate+rng.gauss(0,.01),.005,.25))
+            clamp(self.mutation_rate+rng.gauss(0,.01),.005,.25),
+            max(1,min(6,self.partner_count+(rng.choice([-1,0,1]) if rng.random()<r else 0))),
+            max(1,min(5,self.offspring_count+(rng.choice([-1,0,1]) if rng.random()<r else 0))),
+            clamp(self.partner_selectivity+rng.gauss(0,r*.4),0,1),
+            clamp(self.gene_mix_bias+rng.gauss(0,r*.4),.05,.95))
 
 @dataclass
 class Agent:
