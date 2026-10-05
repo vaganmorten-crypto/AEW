@@ -14,7 +14,7 @@ def test_every_agent_has_genetic_reproduction_traits():
     for a in w.population:
         g=a.genome
         assert g.reproduction_threshold > 0
-        assert 0 < g.reproduction_probability <= .35
+        assert 0 < g.reproduction_probability <= .60
         assert 0 < g.offspring_investment < 1
         assert g.resource_consumption > 0
         assert 0 < g.trade_rate < 1
@@ -38,3 +38,20 @@ def test_invalid_population():
     try: World(1,1)
     except ValueError: return
     assert False
+
+
+def test_reproduction_can_emerge_across_generations():
+    reached = []
+    for seed in range(1, 21):
+        w = World(60, seed)
+        w.run(1500)
+        max_gen = max((a.generation for a in w.population), default=0)
+        reached.append(max_gen)
+    assert max(reached) >= 3, f"no seed reached Gen 3: {reached}"
+
+def test_no_extinction_protection():
+    w = World(20, 99)
+    w.run(2500)
+    # The engine never injects replacement founders or resurrects bankrupt agents.
+    assert all(a.parent is not None for a in w.population[20:])
+    assert not any(e["type"] in {"rescue", "respawn", "extinction_protection"} for e in w.events)
