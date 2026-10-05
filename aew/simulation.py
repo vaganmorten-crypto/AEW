@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from random import Random
 from statistics import mean
 from typing import Any
@@ -16,110 +16,166 @@ class Genome:
     offspring_investment: float
     resource_consumption: float
     mutation_rate: float = 0.08
+    partner_count: int = 1
+    offspring_count: int = 1
+    partner_selectivity: float = 0.5
+    gene_mix_bias: float = 0.5
 
     @classmethod
     def founder(cls, rng: Random) -> "Genome":
-        return cls(
-            risk=rng.uniform(.05,.95),
-            trade_rate=rng.uniform(.05,.95),
-            reproduction_threshold=rng.uniform(130.0,230.0),
-            reproduction_probability=rng.uniform(.01,.08),
-            offspring_investment=rng.uniform(.12,.35),
-            resource_consumption=rng.uniform(.55,1.35),
-            mutation_rate=rng.uniform(.03,.12),
-        )
+        return cls(rng.uniform(.05,.95), rng.uniform(.05,.95), rng.uniform(105,175),
+                   rng.uniform(.015,.09), rng.uniform(.12,.32), rng.uniform(.45,1.05),
+                   rng.uniform(.03,.12), rng.randint(1,4), rng.randint(1,3),
+                   rng.uniform(0,1), rng.uniform(.15,.85))
 
     def mutate(self, rng: Random) -> "Genome":
         r=self.mutation_rate
         return Genome(
-            risk=clamp(self.risk+rng.gauss(0,r),.01,.99),
-            trade_rate=clamp(self.trade_rate+rng.gauss(0,r),.01,.99),
-            reproduction_threshold=clamp(self.reproduction_threshold*(1+rng.gauss(0,r)),60.0,400.0),
-            reproduction_probability=clamp(self.reproduction_probability*(1+rng.gauss(0,r)),.001,.35),
-            offspring_investment=clamp(self.offspring_investment+rng.gauss(0,r*.25),.05,.60),
-            resource_consumption=clamp(self.resource_consumption*(1+rng.gauss(0,r*.5)),.25,2.0),
-            mutation_rate=clamp(self.mutation_rate+rng.gauss(0,.01),.005,.25),
-        )
+            clamp(self.risk+rng.gauss(0,r),.01,.99),
+            clamp(self.trade_rate+rng.gauss(0,r),.01,.99),
+            clamp(self.reproduction_threshold*(1+rng.gauss(0,r)),55,350),
+            clamp(self.reproduction_probability*(1+rng.gauss(0,r)),.001,.40),
+            clamp(self.offspring_investment+rng.gauss(0,r*.25),.05,.55),
+            clamp(self.resource_consumption*(1+rng.gauss(0,r*.5)),.20,1.8),
+            clamp(self.mutation_rate+rng.gauss(0,.01),.005,.25),
+            max(1,min(6,self.partner_count+(rng.choice([-1,0,1]) if rng.random()<r else 0))),
+            max(1,min(5,self.offspring_count+(rng.choice([-1,0,1]) if rng.random()<r else 0))),
+            clamp(self.partner_selectivity+rng.gauss(0,r*.4),0,1),
+            clamp(self.gene_mix_bias+rng.gauss(0,r*.4),.05,.95))
+
+
+    @classmethod
+    def recombine(cls, genomes:list["Genome"], rng:Random, bias:float=.5) -> "Genome":
+        if len(genomes)==1:
+            return genomes[0].mutate(rng)
+        bias=clamp(bias,.05,.95)
+        weights=[bias]+[(1-bias)/(len(genomes)-1)]*(len(genomes)-1)
+        values={}
+        for f in fields(cls):
+            if f.name in ("partner_count","offspring_count"):
+                values[f.name]=getattr(rng.choice(genomes),f.name)
+            else:
+                values[f.name]=sum(getattr(g,f.name)*w for g,w in zip(genomes,weights))
+        return cls(**values).mutate(rng)
 
 @dataclass
 class Agent:
-    id: int
-    cash: float
-    resource: float
-    genome: Genome
-    parent: int | None = None
-    generation: int = 0
-    born: int = 0
-    alive: bool = True
-
+    id:int; cash:float; resource:float; genome:Genome
+    parents:list[int]|None=None; generation:int=0; born:int=0; alive:bool=True
+    children:int=0; trades:int=0; volume:float=0.0; death_tick:int|None=None
     @property
-    def risk(self) -> float:
-        return self.genome.risk
+    def risk(self)->float: return self.genome.risk
+    @property
+    def parent(self)->int|None: return self.parents[0] if self.parents else None
 
 class World:
-    def __init__(self, agents: int = 100, seed: int = 42):
-        if agents < 2: raise ValueError("agents must be >= 2")
-        self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
-        self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
-        self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]
-        self._record()
+    def __init__(self, agents:int=100, seed:int=42, max_population:int=300):
+        if agents<2: raise ValueError("agents must be >= 2")
+        self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents
+        self.price=10.; self.max_population=max_population
+        self.population=[Agent(i,125.,14.,Genome.founder(self.rng)) for i in range(agents)]
+        self.history=[]; self.events=[]; self.births=0; self.deaths=0; self._record()
 
     @property
     def living(self): return [a for a in self.population if a.alive]
+    @property
+    def max_generation(self): return max((a.generation for a in self.population),default=0)
 
-    def _event(self, kind: str, **data: Any) -> None:
+    def _event(self,kind:str,**data:Any):
         self.events.append({"tick":self.tick,"type":kind,**data})
-        if len(self.events)>2000: self.events=self.events[-2000:]
+        if len(self.events)>5000:self.events=self.events[-5000:]
 
-    def step(self) -> None:
+    def _die(self,a:Agent):
+        if a.alive:
+            a.alive=False;a.death_tick=self.tick;self.deaths+=1
+            self._event("bankruptcy",agent=a.id,generation=a.generation)
+
+    def step(self):
         living=self.living
-        if len(living)<2:
-            self.tick+=1; self._record(); return
-        scarcity=max(.2,1.0-len(living)/1000.0)
-        self.price=max(.5,self.price*(1.0+self.rng.gauss(0,.015)+(1-scarcity)*.002))
+        if not living:
+            self.tick+=1;self._record();return
+        scarcity=max(.30,1-len(living)/1200)
+        self.price=max(.5,self.price*(1+self.rng.gauss(0,.012)+(1-scarcity)*.0015))
         self.rng.shuffle(living)
         for buyer,seller in zip(living[::2],living[1::2]):
-            propensity=(buyer.genome.trade_rate+seller.genome.trade_rate)/2
-            if self.rng.random()>propensity: continue
-            qty=min(seller.resource,max(0.0,buyer.risk*self.rng.random()*2.0)); cost=qty*self.price
+            if self.rng.random()>(buyer.genome.trade_rate+seller.genome.trade_rate)/2:continue
+            qty=min(seller.resource,max(0,buyer.risk*self.rng.random()*1.6));cost=qty*self.price
             if qty>0 and cost<=buyer.cash:
-                buyer.cash-=cost; buyer.resource+=qty; seller.cash+=cost; seller.resource-=qty
+                buyer.cash-=cost;buyer.resource+=qty;seller.cash+=cost;seller.resource-=qty
+                buyer.trades+=1;seller.trades+=1;buyer.volume+=cost;seller.volume+=cost
                 self._event("trade",buyer=buyer.id,seller=seller.id,qty=round(qty,3),price=round(self.price,3))
-        for a in living:
-            consumption=a.genome.resource_consumption
-            a.resource+=self.rng.random()*1.5*scarcity-(.7+.6*a.risk)*consumption
-            a.cash-=.08*consumption
-            if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
-            if a.cash<=0.0:
-                a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=max(0,200-len(self.living))
-        candidates=list(self.living); self.rng.shuffle(candidates)
-        for p in candidates[:capacity]:
-            g=p.genome
-            threshold=g.reproduction_threshold
-            resource_threshold=max(2.0,threshold/self.price*.55)
-            if p.cash>=threshold and p.resource>=resource_threshold and self.rng.random()<g.reproduction_probability:
-                cash_invest=p.cash*g.offspring_investment
-                resource_invest=p.resource*g.offspring_investment
-                if cash_invest<=0 or resource_invest<=0: continue
-                p.cash-=cash_invest; p.resource-=resource_invest
-                child=Agent(self.next_id,cash_invest,resource_invest,g.mutate(self.rng),p.id,p.generation+1,self.tick)
-                self.next_id+=1; self.population.append(child)
-                self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
-                    genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
-        self.tick+=1; self._record()
+        for a in list(self.living):
+            c=a.genome.resource_consumption
+            # renewable resource inflow keeps reproduction possible but remains genetically costly
+            a.resource+=self.rng.random()*2.25*scarcity-(.45+.45*a.risk)*c
+            a.cash-=.035*c
+            if a.resource<0:a.cash+=a.resource*self.price;a.resource=0.
+            if a.cash<=0:self._die(a)
+        capacity=max(0,self.max_population-len(self.living))
+        candidates=list(self.living);self.rng.shuffle(candidates)
+        for initiator in candidates:
+            if capacity<=0:break
+            g=initiator.genome
+            if self.rng.random()>=g.reproduction_probability:continue
+            wanted=max(1,min(g.partner_count,len(self.living)))
+            pool=[x for x in self.living if x.id!=initiator.id]
+            self.rng.shuffle(pool)
+            # Selectivity is genetic: high values favor resource-rich partners; low values retain randomness.
+            pool.sort(key=lambda x:g.partner_selectivity*(x.cash+x.resource*self.price)+
+                      (1-g.partner_selectivity)*self.rng.random()*200,reverse=True)
+            parents=[initiator]+pool[:wanted-1]
+            if len(parents)<wanted:continue
+            if any(x.cash<g.reproduction_threshold/wanted for x in parents):continue
+            n=min(g.offspring_count,capacity)
+            cash_parts=[x.cash*g.offspring_investment for x in parents]
+            res_parts=[x.resource*g.offspring_investment for x in parents]
+            cash_pool=sum(cash_parts);res_pool=sum(res_parts)
+            if cash_pool/n<5 or res_pool/n<1:continue
+            for x,ci,ri in zip(parents,cash_parts,res_parts):
+                x.cash-=ci;x.resource-=ri
+            for _ in range(n):
+                child_genome=Genome.recombine([x.genome for x in parents],self.rng,g.gene_mix_bias)
+                child=Agent(self.next_id,cash_pool/n,res_pool/n,child_genome,[x.id for x in parents],
+                            max(x.generation for x in parents)+1,self.tick)
+                for x in parents:x.children+=1
+                self.next_id+=1;self.population.append(child);self.births+=1;capacity-=1
+                self._event("birth",agent=child.id,parent=initiator.id,
+                    parents=[x.id for x in parents],generation=child.generation,
+                    mode=("clone" if wanted==1 else f"{wanted}-parent"),
+                    genes=asdict(child.genome),
+                    investment={"cash":round(cash_pool/n,3),"resource":round(res_pool/n,3)})
+        self.tick+=1;self._record()
 
-    def run(self,ticks:int)->None:
-        if ticks<0: raise ValueError("ticks must be >= 0")
-        for _ in range(ticks): self.step()
+    def run(self,ticks:int):
+        if ticks<0:raise ValueError("ticks must be >= 0")
+        for _ in range(ticks):self.step()
 
-    def _record(self)->None:
-        living=self.living
-        self.history.append({"tick":self.tick,"population":len(living),"price":round(self.price,4),
-          "mean_cash":round(mean([a.cash for a in living]),4) if living else 0.0,
-          "mean_risk":round(mean([a.risk for a in living]),4) if living else 0.0,
-          "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
+    def _record(self):
+        L=self.living
+        self.history.append({"tick":self.tick,"population":len(L),"price":round(self.price,4),
+          "births":self.births,"deaths":self.deaths,"max_generation":self.max_generation,
+          "mean_cash":round(mean([a.cash for a in L]),4) if L else 0.,
+          "mean_risk":round(mean([a.risk for a in L]),4) if L else 0.,
+          "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in L]),5) if L else 0.})
+
+    def inspect_agent(self,agent_id:int)->dict[str,Any]:
+        a=next((x for x in self.population if x.id==agent_id),None)
+        if a is None:raise KeyError(agent_id)
+        by_id={x.id:x for x in self.population}
+        ancestors=[];seen=set();frontier=list(a.parents or [])
+        while frontier:
+            pid=frontier.pop(0)
+            if pid in seen:continue
+            seen.add(pid);ancestors.append(pid)
+            p=by_id.get(pid)
+            if p:frontier.extend(p.parents or [])
+        child_ids=[x.id for x in self.population if a.id in (x.parents or [])]
+        birth_event=next((e for e in reversed(self.events) if e.get("type")=="birth" and e.get("agent")==a.id),None)
+        return {"agent":asdict(a),"age":(self.tick if a.death_tick is None else a.death_tick)-a.born,
+                "parent_ids":list(a.parents or []),"ancestor_ids":ancestors,"child_ids":child_ids,
+                "birth_event":birth_event}
 
     def snapshot(self)->dict[str,Any]:
         return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
+          "births":self.births,"deaths":self.deaths,"max_generation":self.max_generation,
           "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
