@@ -43,6 +43,21 @@ class Genome:
             clamp(self.partner_selectivity+rng.gauss(0,r*.4),0,1),
             clamp(self.gene_mix_bias+rng.gauss(0,r*.4),.05,.95))
 
+
+    @classmethod
+    def recombine(cls, genomes:list["Genome"], rng:Random, bias:float=.5) -> "Genome":
+        if len(genomes)==1:
+            return genomes[0].mutate(rng)
+        bias=clamp(bias,.05,.95)
+        weights=[bias]+[(1-bias)/(len(genomes)-1)]*(len(genomes)-1)
+        values={}
+        for f in fields(cls):
+            if f.name in ("partner_count","offspring_count"):
+                values[f.name]=getattr(rng.choice(genomes),f.name)
+            else:
+                values[f.name]=sum(getattr(g,f.name)*w for g,w in zip(genomes,weights))
+        return cls(**values).mutate(rng)
+
 @dataclass
 class Agent:
     id:int; cash:float; resource:float; genome:Genome
