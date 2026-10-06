@@ -14,3 +14,9 @@ jobs:
       - run: python -m pytest -q
       - run: python -m aew run --ticks 50 --agents 30 --seed 42 --out /tmp/aew.json
       - run: python -m aew dashboard /tmp/aew.json --out /tmp/aew.png
+      - name: Cognitive Gen 0 to Gen N experiment
+        run: python -m aew.experiment --agents 1000 --ticks 500 --seed 42 --out experiment_gen0_genN.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cognitive-experiment-seed-42
+          path: experiment_gen0_genN.json
