@@ -1,0 +1,214 @@
+{
+  "version": "0.4.0",
+  "tick": 5000,
+  "experiment": {
+    "seed": 20261007,
+    "ticks": 5000,
+    "initial_agents": 600,
+    "peak_population": 1146,
+    "peak_tick": 288,
+    "last_alive_tick": 2272,
+    "max_generation_ever": 9,
+    "total_births": 655,
+    "outcome": "natural extinction; no extinction protection"
+  },
+  "history": [
+    {
+      "tick": 1,
+      "population": 600,
+      "max_generation": 0,
+      "mean_wealth": 123.59
+    },
+    {
+      "tick": 51,
+      "population": 900,
+      "max_generation": 3,
+      "mean_wealth": 1353.42
+    },
+    {
+      "tick": 101,
+      "population": 1075,
+      "max_generation": 4,
+      "mean_wealth": 1241.17
+    },
+    {
+      "tick": 201,
+      "population": 1133,
+      "max_generation": 4,
+      "mean_wealth": 970.13
+    },
+    {
+      "tick": 288,
+      "population": 1146,
+      "max_generation": 4,
+      "mean_wealth": 808.32
+    },
+    {
+      "tick": 501,
+      "population": 159,
+      "max_generation": 5,
+      "mean_wealth": 910.34
+    },
+    {
+      "tick": 1001,
+      "population": 27,
+      "max_generation": 6,
+      "mean_wealth": 738.32
+    },
+    {
+      "tick": 1251,
+      "population": 37,
+      "max_generation": 9,
+      "mean_wealth": 350.81
+    },
+    {
+      "tick": 1501,
+      "population": 17,
+      "max_generation": 8,
+      "mean_wealth": 319.13
+    },
+    {
+      "tick": 2001,
+      "population": 11,
+      "max_generation": 7,
+      "mean_wealth": 256.37
+    },
+    {
+      "tick": 2272,
+      "population": 1,
+      "max_generation": 5,
+      "mean_wealth": 245.38
+    },
+    {
+      "tick": 5000,
+      "population": 0,
+      "max_generation": 0,
+      "mean_wealth": 0
+    }
+  ],
+  "agents": [
+    {
+      "id": 1236,
+      "generation": 9,
+      "parent_ids": [
+        1231,
+        1209
+      ],
+      "offspring_ids": [],
+      "cash": -0.14262608780413,
+      "inventory": {
+        "grain": -10.021184099784522,
+        "energy": 6.04345718302411,
+        "compute": 3.9996123727110544
+      },
+      "fitness": 306.6349268592463,
+      "alive": false,
+      "genome": {
+        "risk": 0.8580352015790926,
+        "thrift": 0.902545711410204,
+        "mutation_rate": 0.08425071725789467,
+        "trade_bias": {
+          "grain": 0,
+          "energy": 0.2445263224337051,
+          "compute": 0
+        },
+        "cognition": {
+          "memory": 0.4138224529782186,
+          "planning": 0.8834721749746782,
+          "exploration": 0.7569437754646582,
+          "learning": 0.8575036745830178,
+          "sociality": 0.8373488336340886
+        },
+        "reproduction_threshold": 121.36273039775911,
+        "reproduction_probability": 0.015019230558134774,
+        "offspring_investment": 0.30418836465903215,
+        "mate_preference": 0.7090517073449913,
+        "recombination": 0.6288888212813208
+      }
+    },
+    {
+      "id": 1240,
+      "generation": 9,
+      "parent_ids": [
+        1227,
+        1180
+      ],
+      "offspring_ids": [],
+      "cash": -0.11219695526026177,
+      "inventory": {
+        "grain": -8.473808750091594,
+        "energy": 4.452107330620967,
+        "compute": 4.023030152568582
+      },
+      "fitness": 224.9593536656599,
+      "alive": false,
+      "genome": {
+        "risk": 0.6350497211324143,
+        "thrift": 0.9541268494748241,
+        "mutation_rate": 0.07597986889048833,
+        "trade_bias": {
+          "grain": 0.08537837566252315,
+          "energy": 0.2445263224337051,
+          "compute": 0.042379938150736596
+        },
+        "cognition": {
+          "memory": 0.10386055695121114,
+          "planning": 0.4838118278303124,
+          "exploration": 0.7569437754646582,
+          "learning": 0.3363414365612193,
+          "sociality": 0.9570221774863928
+        },
+        "reproduction_threshold": 135.5491072639005,
+        "reproduction_probability": 0.015019230558134774,
+        "offspring_investment": 0.30418836465903215,
+        "mate_preference": 0.6354152479401548,
+        "recombination": 0.20549475960487606
+      }
+    },
+    {
+      "id": 1238,
+      "generation": 9,
+      "parent_ids": [
+        1227,
+        1180
+      ],
+      "offspring_ids": [],
+      "cash": -0.14262608780413,
+      "inventory": {
+        "grain": -7.258861665430353,
+        "energy": 2.591441407849376,
+        "compute": 4.672131947156583
+      },
+      "fitness": 133.95380678320012,
+      "alive": false,
+      "genome": {
+        "risk": 0.8580352015790926,
+        "thrift": 0.902545711410204,
+        "mutation_rate": 0.08992946871615955,
+        "trade_bias": {
+          "grain": 0.08537837566252315,
+          "energy": 0.3117037823059313,
+          "compute": 0.042379938150736596
+        },
+        "cognition": {
+          "memory": 0.4138224529782186,
+          "planning": 0.8834721749746782,
+          "exploration": 0.7569437754646582,
+          "learning": 0.3363414365612193,
+          "sociality": 0.09944931515333855
+        },
+        "reproduction_threshold": 135.5491072639005,
+        "reproduction_probability": 0.015019230558134774,
+        "offspring_investment": 0.30418836465903215,
+        "mate_preference": 0.6589058890056037,
+        "recombination": 0.6288888212813208
+      }
+    }
+  ],
+  "safety": {
+    "closed_world": true,
+    "real_money_execution": false,
+    "network_execution": false,
+    "external_data": "read-only numeric input only"
+  }
+}
