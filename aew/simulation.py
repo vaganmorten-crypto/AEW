@@ -73,7 +73,7 @@ class World:
 
     def step(self) -> None:
         living=self.living
-        if len(living)<2:
+        if not living:
             self.tick+=1; self._record(); return
         scarcity=max(.2,1.0-len(living)/1000.0)
         self.price=max(.5,self.price*(1.0+self.rng.gauss(0,.015)+(1-scarcity)*.002))
@@ -87,7 +87,14 @@ class World:
                 self._event("trade",buyer=buyer.id,seller=seller.id,qty=round(qty,3),price=round(self.price,3))
         for a in living:
             consumption=a.genome.resource_consumption
-            a.resource+=self.rng.random()*1.5*scarcity-(.7+.6*a.risk)*consumption
+            # Productive output depends on an inherited trade strategy.
+            output=self.rng.random()*2.0*scarcity*(.5+a.genome.trade_rate)
+            a.resource+=output-(.7+.6*a.risk)*consumption
+            # Outside demand is finite and decreases with population pressure.
+            demand=max(0.0,1.0-len(living)/self.max_population)
+            sale=min(max(0.0,a.resource-2.0),output*demand)
+            a.resource-=sale
+            a.cash+=sale*self.price
             a.cash-=.08*consumption
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
