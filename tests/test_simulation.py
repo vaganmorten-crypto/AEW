@@ -38,3 +38,28 @@ def test_invalid_population():
     try: World(1,1)
     except ValueError: return
     assert False
+
+def test_single_survivor_is_not_immortal():
+    w=World(2,19)
+    w.population[1].alive=False
+    lone=w.population[0]
+    lone.cash=.001
+    lone.resource=0.0
+    w.step()
+    assert not lone.alive
+    assert len(w.living)==0
+
+def test_large_founder_population_has_room_for_births():
+    w=World(600,42)
+    assert w.max_population>=1200
+    assert len(w.living)==600
+
+def test_no_extinction_protection():
+    w=World(2,7)
+    for agent in w.population:
+        agent.cash=0.001
+        agent.resource=0.0
+    w.step()
+    assert len(w.living)==0
+    w.step()
+    assert len(w.living)==0
