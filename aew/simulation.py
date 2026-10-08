@@ -57,8 +57,11 @@ class Agent:
         return self.genome.risk
 
 class World:
-    def __init__(self, agents: int = 100, seed: int = 42):
+    def __init__(self, agents: int = 100, seed: int = 42, deadline: int | None = 1000, elite_slots: int = 10, mutation: bool = True, inheritance: bool = True):
         if agents < 2: raise ValueError("agents must be >= 2")
+        if deadline is not None and deadline < 1: raise ValueError("deadline must be positive")
+        if elite_slots < 0: raise ValueError("elite_slots must be nonnegative")
+        self.deadline=deadline; self.elite_slots=elite_slots; self.mutation=mutation; self.inheritance=inheritance
         self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
         self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
         self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]
@@ -92,9 +95,8 @@ class World:
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
                 a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=max(0,200-len(self.living))
         candidates=list(self.living); self.rng.shuffle(candidates)
-        for p in candidates[:capacity]:
+        for p in candidates:
             g=p.genome
             threshold=g.reproduction_threshold
             resource_threshold=max(2.0,threshold/self.price*.55)
@@ -103,11 +105,20 @@ class World:
                 resource_invest=p.resource*g.offspring_investment
                 if cash_invest<=0 or resource_invest<=0: continue
                 p.cash-=cash_invest; p.resource-=resource_invest
-                child=Agent(self.next_id,cash_invest,resource_invest,g.mutate(self.rng),p.id,p.generation+1,self.tick)
+                child=Agent(self.next_id,cash_invest,resource_invest,(g.mutate(self.rng) if self.mutation else g) if self.inheritance else Genome.founder(self.rng),p.id,p.generation+1,self.tick)
                 self.next_id+=1; self.population.append(child)
                 self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
                     genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
-        self.tick+=1; self._record()
+        self.tick+=1
+        if self.deadline is not None:
+            # Recompute the elite after all economic activity and births.
+            ranked=sorted(self.living,key=lambda a:(-(a.cash+a.resource*self.price),a.id))
+            protected={a.id for a in ranked[:self.elite_slots]}
+            for a in self.living:
+                if a.id not in protected and self.tick-a.born>=self.deadline:
+                    a.alive=False
+                    self._event("deadline_death",agent=a.id,generation=a.generation)
+        self._record()
 
     def run(self,ticks:int)->None:
         if ticks<0: raise ValueError("ticks must be >= 0")
@@ -121,5 +132,5 @@ class World:
           "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
 
     def snapshot(self)->dict[str,Any]:
-        return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
+        return {"version":"0.4.1","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
           "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
