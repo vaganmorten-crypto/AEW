@@ -59,7 +59,7 @@ class Agent:
 class World:
     def __init__(self, agents: int = 100, seed: int = 42):
         if agents < 2: raise ValueError("agents must be >= 2")
-        self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
+        self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.max_population=max(200,agents*2); self.price=10.0
         self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
         self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]
         self._record()
@@ -92,7 +92,7 @@ class World:
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
                 a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=max(0, max(200, self.next_id * 2)-len(self.living))
+        capacity=max(0,self.max_population-len(self.living))
         candidates=list(self.living); self.rng.shuffle(candidates)
         for p in candidates[:capacity]:
             g=p.genome
