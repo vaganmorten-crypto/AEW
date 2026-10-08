@@ -64,20 +64,27 @@ class World:
         self.deadline=deadline; self.elite_slots=elite_slots; self.mutation=mutation; self.inheritance=inheritance
         self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
         self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
-        self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]
+        self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]; self.event_counts: dict[str,int]={}
         self._record()
 
     @property
     def living(self): return [a for a in self.population if a.alive]
 
     def _event(self, kind: str, **data: Any) -> None:
+        self.event_counts[kind]=self.event_counts.get(kind,0)+1
         self.events.append({"tick":self.tick,"type":kind,**data})
         if len(self.events)>2000: self.events=self.events[-2000:]
 
     def step(self) -> None:
         living=self.living
         if len(living)<2:
-            self.tick+=1; self._record(); return
+            self.tick+=1
+            if self.deadline is not None:
+                protected={a.id for a in sorted(living,key=lambda a:(-(a.cash+a.resource*self.price),a.id))[:self.elite_slots]}
+                for a in living:
+                    if a.id not in protected and self.tick-a.born>=self.deadline:
+                        a.alive=False; self._event("deadline_death",agent=a.id,generation=a.generation)
+            self._record(); return
         scarcity=max(.2,1.0-len(living)/1000.0)
         self.price=max(.5,self.price*(1.0+self.rng.gauss(0,.015)+(1-scarcity)*.002))
         self.rng.shuffle(living)
@@ -133,4 +140,4 @@ class World:
 
     def snapshot(self)->dict[str,Any]:
         return {"version":"0.4.1","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
-          "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
+          "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events,"event_counts":self.event_counts}
