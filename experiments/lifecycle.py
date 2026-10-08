@@ -24,7 +24,7 @@ def main():
             for seed in range(args.seeds):
                 w=World(agents=args.agents,seed=seed,**config)
                 w.run(args.ticks)
-                counts={kind:sum(e["type"]==kind for e in w.events) for kind in ("birth","deadline_death","bankruptcy")}
+                counts={kind:w.event_counts.get(kind,0) for kind in ("birth","deadline_death","bankruptcy")}
                 row=dict(group=group,seed=seed,final_population=len(w.living),births=counts["birth"],deadline_deaths=counts["deadline_death"],bankruptcies=counts["bankruptcy"],max_generation=max((a.generation for a in w.population),default=0),final_mean_cash=w.history[-1]["mean_cash"],final_mean_reproduction_probability=w.history[-1]["mean_reproduction_probability"])
                 writer.writerow(row)
                 print(group,seed,row["final_population"],flush=True)
