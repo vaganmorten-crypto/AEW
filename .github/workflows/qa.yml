@@ -1,0 +1,32 @@
+name: AEW quality assurance
+on:
+  push:
+    branches: [feature/aew-0.4.1-lifecycle]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - name: Stress test and invariants
+        run: |
+          python - <<'PY'
+          import math
+          from aew.simulation import World
+          for seed in (1, 2, 3):
+              w = World(agents=600, seed=seed, deadline=1000, elite_slots=10)
+              w.run(10000)
+              ids = [a.id for a in w.population]
+              assert len(ids) == len(set(ids))
+              assert len(w.history) == 10001
+              assert w.tick == 10000
+              assert all(math.isfinite(a.cash) and math.isfinite(a.resource) for a in w.population)
+              assert all(a.generation >= 0 for a in w.population)
+              print(f"seed={seed} tick={w.tick} living={len(w.living)} births={w.event_counts.get('birth',0)} deaths={w.event_counts.get('deadline_death',0)}")
+          PY
