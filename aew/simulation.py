@@ -92,7 +92,7 @@ class World:
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
                 a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=max(0,200-len(self.living))
+        capacity=max(0, max(200, self.next_id * 2)-len(self.living))
         candidates=list(self.living); self.rng.shuffle(candidates)
         for p in candidates[:capacity]:
             g=p.genome
