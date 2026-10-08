@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from random import Random
 from statistics import mean
 from typing import Any
@@ -77,7 +77,7 @@ class World:
 
     def step(self) -> None:
         living=self.living
-        if len(living)<2:
+        if not living:
             self.tick+=1
             if self.deadline is not None:
                 protected={a.id for a in sorted(living,key=lambda a:(-(a.cash+a.resource*self.price),a.id))[:self.elite_slots]}
@@ -112,7 +112,7 @@ class World:
                 resource_invest=p.resource*g.offspring_investment
                 if cash_invest<=0 or resource_invest<=0: continue
                 p.cash-=cash_invest; p.resource-=resource_invest
-                child=Agent(self.next_id,cash_invest,resource_invest,(g.mutate(self.rng) if self.mutation else g) if self.inheritance else Genome.founder(self.rng),p.id,p.generation+1,self.tick)
+                child=Agent(self.next_id,cash_invest,resource_invest,(g.mutate(self.rng) if self.mutation else replace(g)) if self.inheritance else Genome.founder(self.rng),p.id,p.generation+1,self.tick)
                 self.next_id+=1; self.population.append(child)
                 self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
                     genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
