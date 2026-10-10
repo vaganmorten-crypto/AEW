@@ -12,4 +12,4 @@ def test_genome_mutation_is_bounded_and_changes_traits():
 
 def test_model_exports_canonical_world():
     w=World(10,7); w.run(5)
-    assert w.snapshot()["version"]=="0.3.0"
+    assert w.snapshot()["version"]=="0.5.0-experimental"
