@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from random import Random
 from statistics import mean
 from typing import Any
+from aew.reproduction import ReproductionConfig, offspring_genome
 
 def clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
@@ -57,8 +58,9 @@ class Agent:
         return self.genome.risk
 
 class World:
-    def __init__(self, agents: int = 100, seed: int = 42):
+    def __init__(self, agents: int = 100, seed: int = 42, group: str = 'A'):
         if agents < 2: raise ValueError("agents must be >= 2")
+        self.config=ReproductionConfig(group)
         self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
         self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
         self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]
@@ -92,9 +94,8 @@ class World:
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
                 a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=max(0,200-len(self.living))
         candidates=list(self.living); self.rng.shuffle(candidates)
-        for p in candidates[:capacity]:
+        for p in candidates:
             g=p.genome
             threshold=g.reproduction_threshold
             resource_threshold=max(2.0,threshold/self.price*.55)
@@ -103,7 +104,15 @@ class World:
                 resource_invest=p.resource*g.offspring_investment
                 if cash_invest<=0 or resource_invest<=0: continue
                 p.cash-=cash_invest; p.resource-=resource_invest
-                child=Agent(self.next_id,cash_invest,resource_invest,g.mutate(self.rng),p.id,p.generation+1,self.tick)
+                partners = [p]
+                if self.config.mode in ('D', 'E'):
+                    pool = [a for a in candidates if a.id != p.id and a.alive]
+                    if self.config.mode == 'D' and not pool:
+                        continue
+                    if pool:
+                        partners.append(self.rng.choice(pool))
+                child_genome = offspring_genome([a.genome for a in partners], self.rng, self.config)
+                child=Agent(self.next_id,cash_invest,resource_invest,child_genome,p.id,p.generation+1,self.tick)
                 self.next_id+=1; self.population.append(child)
                 self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
                     genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
@@ -121,5 +130,5 @@ class World:
           "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
 
     def snapshot(self)->dict[str,Any]:
-        return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
+        return {"version":"0.5.0-experimental","group":self.config.mode,"seed":self.seed,"tick":self.tick,"price":round(self.price,4),
           "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
