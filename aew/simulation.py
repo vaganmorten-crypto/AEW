@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from random import Random
 from statistics import mean
 from typing import Any
@@ -16,6 +16,9 @@ class Genome:
     offspring_investment: float
     resource_consumption: float
     mutation_rate: float = 0.08
+    duplication_rate: float = 0.15
+    repair_rate: float = 0.5
+    recombination_rate: float = 0.25
 
     @classmethod
     def founder(cls, rng: Random) -> "Genome":
@@ -29,6 +32,19 @@ class Genome:
             mutation_rate=rng.uniform(.03,.12),
         )
 
+    def reproduce(self, rng: Random, mode: str = 'E', partners: tuple['Genome', ...] = ()) -> 'Genome':
+        if mode not in ('A', 'B', 'C', 'D', 'E'):
+            raise ValueError('unknown reproduction mode')
+        source = self
+        if mode in ('D', 'E') and partners and rng.random() < self.recombination_rate:
+            pool = (self,) + partners
+            source = Genome(**{key: getattr(rng.choice(pool), key) for key in self.__dataclass_fields__})
+        if mode in ('B', 'E') and rng.random() < self.duplication_rate:
+            source = replace(source, mutation_rate=clamp(source.mutation_rate * .5, .005, .25))
+        if mode in ('C', 'E') and rng.random() < self.repair_rate:
+            source = replace(source, mutation_rate=clamp(source.mutation_rate * .5, .005, .25))
+        return source.mutate(rng)
+
     def mutate(self, rng: Random) -> "Genome":
         r=self.mutation_rate
         return Genome(
@@ -39,6 +55,9 @@ class Genome:
             offspring_investment=clamp(self.offspring_investment+rng.gauss(0,r*.25),.05,.60),
             resource_consumption=clamp(self.resource_consumption*(1+rng.gauss(0,r*.5)),.25,2.0),
             mutation_rate=clamp(self.mutation_rate+rng.gauss(0,.01),.005,.25),
+            duplication_rate=clamp(self.duplication_rate+rng.gauss(0,r*.2),0,1),
+            repair_rate=clamp(self.repair_rate+rng.gauss(0,r*.2),0,1),
+            recombination_rate=clamp(self.recombination_rate+rng.gauss(0,r*.2),0,1),
         )
 
 @dataclass
@@ -57,8 +76,10 @@ class Agent:
         return self.genome.risk
 
 class World:
-    def __init__(self, agents: int = 100, seed: int = 42):
+    def __init__(self, agents: int = 100, seed: int = 42, mode: str = 'E'):
         if agents < 2: raise ValueError("agents must be >= 2")
+        if mode not in ("A", "B", "C", "D", "E"): raise ValueError("unknown mode")
+        self.mode=mode
         self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
         self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
         self.history: list[dict[str,Any]]=[]; self.events: list[dict[str,Any]]=[]
@@ -92,7 +113,7 @@ class World:
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
                 a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=max(0,200-len(self.living))
+        capacity=len(self.living)
         candidates=list(self.living); self.rng.shuffle(candidates)
         for p in candidates[:capacity]:
             g=p.genome
@@ -103,7 +124,7 @@ class World:
                 resource_invest=p.resource*g.offspring_investment
                 if cash_invest<=0 or resource_invest<=0: continue
                 p.cash-=cash_invest; p.resource-=resource_invest
-                child=Agent(self.next_id,cash_invest,resource_invest,g.mutate(self.rng),p.id,p.generation+1,self.tick)
+                child=Agent(self.next_id,cash_invest,resource_invest,g.reproduce(self.rng, self.mode, tuple(a.genome for a in self.rng.sample([a for a in candidates if a.id != p.id], min(2, len(candidates)-1))) if self.mode in ('D','E') and len(candidates)>1 else ()),p.id,p.generation+1,self.tick)
                 self.next_id+=1; self.population.append(child)
                 self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
                     genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
@@ -121,5 +142,5 @@ class World:
           "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
 
     def snapshot(self)->dict[str,Any]:
-        return {"version":"0.3.0","seed":self.seed,"tick":self.tick,"price":round(self.price,4),
+        return {"version":"0.5.0","reproduction_mode":self.mode,"seed":self.seed,"tick":self.tick,"price":round(self.price,4),
           "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
