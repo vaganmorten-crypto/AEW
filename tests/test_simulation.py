@@ -6,7 +6,7 @@ def test_seed_is_deterministic():
 
 def test_tick_snapshot_and_observability():
     w=World(10,1); w.run(5); s=w.snapshot()
-    assert s["tick"]==5 and s["version"]=="0.3.0" and len(s["history"])==6
+    assert s["tick"]==5 and s["version"]=="0.5.0-experimental" and len(s["history"])==6
     assert "events" in s and all("tick" in e and "type" in e for e in s["events"])
 
 def test_every_agent_has_genetic_reproduction_traits():
