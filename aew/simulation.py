@@ -19,6 +19,9 @@ class Genome:
     duplication_rate: float = 0.15
     repair_rate: float = 0.5
     recombination_rate: float = 0.25
+    # Independent functional copies provide redundancy under mutation.
+    backup_risk: float | None = None
+    backup_trade_rate: float | None = None
 
     @classmethod
     def founder(cls, rng: Random) -> "Genome":
@@ -32,18 +35,23 @@ class Genome:
             mutation_rate=rng.uniform(.03,.12),
         )
 
-    def reproduce(self, rng: Random, mode: str = 'E', partners: tuple['Genome', ...] = ()) -> 'Genome':
-        if mode not in ('A', 'B', 'C', 'D', 'E'):
-            raise ValueError('unknown reproduction mode')
-        source = self
-        if mode in ('D', 'E') and partners and rng.random() < self.recombination_rate:
-            pool = (self,) + partners
-            source = Genome(**{key: getattr(rng.choice(pool), key) for key in self.__dataclass_fields__})
-        if mode in ('B', 'E') and rng.random() < self.duplication_rate:
-            source = replace(source, mutation_rate=clamp(source.mutation_rate * .5, .005, .25))
-        if mode in ('C', 'E') and rng.random() < self.repair_rate:
-            source = replace(source, mutation_rate=clamp(source.mutation_rate * .5, .005, .25))
-        return source.mutate(rng)
+    def reproduce(self, rng: Random, mode: str = "E", partners: tuple["Genome", ...] = ()) -> "Genome":
+        if mode not in ("A", "B", "C", "D", "E"):
+            raise ValueError("unknown reproduction mode")
+        pool = (self,) + partners if mode in ("D", "E") and partners and rng.random() < self.recombination_rate else (self,)
+        source = Genome(**{key: getattr(rng.choice(pool), key) for key in self.__dataclass_fields__})
+        # B: preserve independent copies of functional traits before mutation.
+        if mode in ("B", "E") and rng.random() < source.duplication_rate:
+            source.backup_risk = source.risk
+            source.backup_trade_rate = source.trade_rate
+        child = source.mutate(rng)
+        # C: inherited repair machinery restores damaged traits from backups.
+        if mode in ("C", "E") and rng.random() < source.repair_rate:
+            if source.backup_risk is not None:
+                child.risk = source.backup_risk
+            if source.backup_trade_rate is not None:
+                child.trade_rate = source.backup_trade_rate
+        return child
 
     def mutate(self, rng: Random) -> "Genome":
         r=self.mutation_rate
@@ -58,6 +66,8 @@ class Genome:
             duplication_rate=clamp(self.duplication_rate+rng.gauss(0,r*.2),0,1),
             repair_rate=clamp(self.repair_rate+rng.gauss(0,r*.2),0,1),
             recombination_rate=clamp(self.recombination_rate+rng.gauss(0,r*.2),0,1),
+            backup_risk=self.backup_risk,
+            backup_trade_rate=self.backup_trade_rate,
         )
 
 @dataclass
@@ -113,9 +123,8 @@ class World:
             if a.resource<0: a.cash+=a.resource*self.price; a.resource=0.0
             if a.cash<=0.0:
                 a.alive=False; self._event("bankruptcy",agent=a.id,generation=a.generation)
-        capacity=len(self.living)
         candidates=list(self.living); self.rng.shuffle(candidates)
-        for p in candidates[:capacity]:
+        for p in candidates:
             g=p.genome
             threshold=g.reproduction_threshold
             resource_threshold=max(2.0,threshold/self.price*.55)
