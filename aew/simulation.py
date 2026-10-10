@@ -58,8 +58,12 @@ class Agent:
         return self.genome.risk
 
 class World:
-    def __init__(self, agents: int = 100, seed: int = 42, group: str = 'A'):
+    def __init__(self, agents: int = 100, seed: int = 42, group: str = 'A', resource_model: str = 'baseline'):
         if agents < 2: raise ValueError("agents must be >= 2")
+        if resource_model not in ("baseline", "scaled", "abundant"):
+            raise ValueError("Unknown resource model")
+        self.resource_model = resource_model
+        self.initial_agents = agents
         self.config=ReproductionConfig(group)
         self.rng=Random(seed); self.seed=seed; self.tick=0; self.next_id=agents; self.price=10.0
         self.population=[Agent(i,100.0,10.0,Genome.founder(self.rng)) for i in range(agents)]
@@ -77,7 +81,10 @@ class World:
         living=self.living
         if len(living)<2:
             self.tick+=1; self._record(); return
-        scarcity=max(.2,1.0-len(living)/1000.0)
+        capacity = 1000.0 if self.resource_model == 'baseline' else float(self.initial_agents)
+        scarcity=max(.2,1.0-len(living)/capacity)
+        if self.resource_model == 'abundant':
+            scarcity = max(.8, scarcity)
         self.price=max(.5,self.price*(1.0+self.rng.gauss(0,.015)+(1-scarcity)*.002))
         self.rng.shuffle(living)
         for buyer,seller in zip(living[::2],living[1::2]):
@@ -130,5 +137,5 @@ class World:
           "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
 
     def snapshot(self)->dict[str,Any]:
-        return {"version":"0.5.0-experimental","group":self.config.mode,"seed":self.seed,"tick":self.tick,"price":round(self.price,4),
+        return {"version":"0.5.0-experimental","group":self.config.mode,"resource_model":self.resource_model,"seed":self.seed,"tick":self.tick,"price":round(self.price,4),
           "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
