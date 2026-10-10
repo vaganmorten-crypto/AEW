@@ -7,10 +7,12 @@ import time
 from pathlib import Path
 from statistics import mean
 from aew.simulation import World
+from aew.diagnostics import diagnose
 
 FIELDS = ("group", "seed", "initial_agents", "ticks", "final_population",
           "peak_population", "max_generation", "births", "total_cash",
-          "total_resource", "elapsed_seconds")
+          "total_resource", "elapsed_seconds", "eligible_both", "blocked_cash",
+          "blocked_resources", "deaths", "events_retained", "event_log_truncated")
 
 
 def execute(group, seed, agents, ticks):
@@ -22,13 +24,20 @@ def execute(group, seed, agents, ticks):
         # History is already collected by World; do not serialize it per tick.
         peak = max(peak, world.history[-1]["population"])
     living = world.living
+    diagnostic = diagnose(world)
     return dict(group=group, seed=seed, initial_agents=agents, ticks=ticks,
                 final_population=len(living), peak_population=peak,
                 max_generation=max((a.generation for a in world.population), default=0),
                 births=world.next_id-agents,
                 total_cash=round(sum(a.cash for a in living), 6),
                 total_resource=round(sum(a.resource for a in living), 6),
-                elapsed_seconds=round(time.perf_counter()-start, 3))
+                elapsed_seconds=round(time.perf_counter()-start, 3),
+                eligible_both=diagnostic['eligible_both'],
+                blocked_cash=diagnostic['blocked_cash'],
+                blocked_resources=diagnostic['blocked_resources'],
+                deaths=diagnostic['deaths'],
+                events_retained=diagnostic['events_retained'],
+                event_log_truncated=diagnostic['event_log_truncated'])
 
 
 def write_atomic(path, data):
@@ -72,7 +81,8 @@ def run_suite(output, agents=10000, ticks=10000, seeds=30, groups="ABCDE"):
         writer.writerows(rows)
     summary = {g: {k: mean(row[k] for row in rows if row["group"] == g)
                    for k in ("final_population", "peak_population", "max_generation",
-                             "births", "total_cash", "total_resource", "elapsed_seconds")}
+                             "births", "total_cash", "total_resource", "elapsed_seconds",
+                             "eligible_both", "blocked_cash", "blocked_resources", "deaths")}
                for g in groups}
     write_atomic(output / "summary.json", summary)
     return rows
