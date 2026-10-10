@@ -1,0 +1,57 @@
+name: AEW experimental load tests
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Select a load profile"
+        required: true
+        default: "10k-100"
+        type: choice
+        options:
+          - 10k-100
+          - 10k-1000
+          - 10k-10000
+          - 50k-100
+permissions:
+  contents: read
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out experimental engine (not main)
+        uses: actions/checkout@v4
+        with:
+          ref: experiment/aew-0.5.0-reproduction
+          persist-credentials: false
+      - name: Record tested revision
+        run: |
+          mkdir -p load-results
+          git rev-parse HEAD > load-results/commit.txt
+          git status --short >> load-results/commit.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run correctness checks
+        run: python -m pytest -q
+      - name: Run selected load profile
+        shell: bash
+        run: |
+          case "${{ inputs.profile }}" in
+            10k-100) AGENTS=10000; TICKS=100 ;;
+            10k-1000) AGENTS=10000; TICKS=1000 ;;
+            10k-10000) AGENTS=10000; TICKS=10000 ;;
+            50k-100) AGENTS=50000; TICKS=100 ;;
+            *) exit 2 ;;
+          esac
+          /usr/bin/time -v -o load-results/resources.txt \
+            python -m aew.experiments --agents "$AGENTS" --ticks "$TICKS" --seeds 1 --groups A --out load-results/run
+      - name: Upload results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aew-experimental-load-${{ github.run_id }}
+          path: load-results/
+          retention-days: 30
