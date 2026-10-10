@@ -1,0 +1,40 @@
+name: AEW multigeneration survival
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - diagnostics/aew-0.5.0
+    paths:
+      - aew/generation_study.py
+      - .github/workflows/aew-generations.yml
+jobs:
+  generation-study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Correctness gate
+        run: |
+          python -m pip install pytest
+          python -m pytest -q
+      - name: Long-run abundant-model study
+        run: python -m aew.generation_study --sizes 1000 5000 10000 --seeds 42 43 44 --ticks 1000 --out generation-results
+      - name: Verify study outputs
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+          p=Path("generation-results")
+          rows=list(csv.DictReader((p/"summary.csv").open()))
+          assert len(rows)==9
+          assert all(int(r["ticks"])==1000 for r in rows)
+          print("Nine long-run results recorded")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aew-generation-study
+          path: generation-results/
