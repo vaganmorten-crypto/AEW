@@ -6,7 +6,7 @@ def test_seed_is_deterministic():
 
 def test_tick_snapshot_and_observability():
     w=World(10,1); w.run(5); s=w.snapshot()
-    assert s["tick"]==5 and s["version"]=="0.3.0" and len(s["history"])==6
+    assert s["tick"]==5 and s["version"]=="0.5.0" and len(s["history"])==6
     assert "events" in s and all("tick" in e and "type" in e for e in s["events"])
 
 def test_every_agent_has_genetic_reproduction_traits():
@@ -38,3 +38,44 @@ def test_invalid_population():
     try: World(1,1)
     except ValueError: return
     assert False
+
+def test_all_reproduction_modes_and_seed_replay():
+    for mode in "ABCDE":
+        a = World(12, 7, mode=mode)
+        b = World(12, 7, mode=mode)
+        a.run(20)
+        b.run(20)
+        assert a.snapshot() == b.snapshot()
+        assert a.snapshot()["reproduction_mode"] == mode
+
+def test_duplication_and_repair():
+    from random import Random
+    from aew.simulation import Genome
+    g = Genome.founder(Random(3))
+    g.duplication_rate = 1
+    g.repair_rate = 1
+    child = g.reproduce(Random(9), "E")
+    assert child.backup_risk == g.risk
+    assert child.backup_trade_rate == g.trade_rate
+    assert child.risk == g.risk
+    assert child.trade_rate == g.trade_rate
+
+def test_recombination_multiple_parents():
+    from random import Random
+    from aew.simulation import Genome
+    g = Genome.founder(Random(1))
+    h = Genome.founder(Random(2))
+    g.recombination_rate = 1
+    child = g.reproduce(Random(4), "D", (h,))
+    assert isinstance(child, Genome)
+
+def test_no_hard_population_cap():
+    w = World(600, 1)
+    assert len(w.living) == 600
+    w.step()
+    assert w.tick == 1
+
+def test_invalid_mode():
+    import pytest
+    with pytest.raises(ValueError):
+        World(2, 1, mode="X")
