@@ -1,29 +1,17 @@
-# AEW 0.3.0 — Open-Ended Economic Evolution Laboratory (development)
+# AEW 0.5.0 development — reproduction experiments
 
-AEW is a sandboxed artificial-life economy. Version 0.3.0 adds observability: structured trade/birth/bankruptcy events plus a responsive browser observatory intended for desktop and phone.
+**Status: experimental, not released.** The canonical Python engine is `aew/simulation.py`. The default branch still has a 0.3.0 engine and a separately authored 0.4.0 browser observatory. These are not evidence that the 0.5.0 experiments have been implemented or measured.
 
-## Mobile observatory
+The 0.5.0 development line will compare five reproduction mechanisms: A simple copying/mutation; B function duplication; C heritable error-checking/repair; D cloning and multi-parent recombination; E all mechanisms available. Each arm must run 600 founders, 10,000 ticks and 30 deterministic seeds, with recorded ancestry, population, economic resources, mutation and reproduction counts, and extinction times. All arms must share the same environmental assumptions and seeds. No mechanism is declared superior without measured results.
 
-Open `docs/index.html` locally, or publish the `docs/` folder with GitHub Pages. The browser dashboard runs a deterministic virtual AEW economy entirely in the browser and shows:
+**Known baseline limitation:** `aew/simulation.py` currently imposes `capacity=max(0,200-len(self.living))`, limiting births; this must be removed or replaced with explicit resource competition before the experiment. The current Python engine supports only asexual mutated offspring. The HTML dashboard uses separate 0.4.0 data; it must not be presented as live output from the Python engine.
 
-- live tick, population, virtual price and event count
-- population/price chart
-- trade, birth and bankruptcy event stream
-- top-agent table
-- per-agent lineage/details
-- run/pause, single-step and 1x/10x/100x controls
-
-No broker APIs, credentials, real money, external trading, network penetration or autonomous access to external systems are used.
-
-## Python simulator
+## Existing CLI
 
 ```bash
 python -m pip install -r requirements.txt
 python -m aew run --ticks 100 --agents 30 --seed 42 --out aew_snapshot.json
-python -m aew dashboard aew_snapshot.json --out aew_dashboard.png
 ```
-
-Snapshots now include an `events` array suitable for analysis and future server-side streaming.
 
 ## Tests
 
@@ -32,4 +20,4 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-This branch is the v0.3.0 development line; v0.2.1 remains the stable baseline until tests and review are complete.
+Do not tag or publish 0.5.0 as stable until the new reproduction engine, tests, 150 runs, generated observatory data and GitHub Pages checks pass.
