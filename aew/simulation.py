@@ -45,12 +45,17 @@ class Genome:
             source.backup_risk = source.risk
             source.backup_trade_rate = source.trade_rate
         child = source.mutate(rng)
-        # C: inherited repair machinery restores damaged traits from backups.
+        # C: repair compares copied traits against the parent template when no backup exists.
+        # This is an explicit, heritable proofreading mechanism, not guaranteed harmless mutation.
         if mode in ("C", "E") and rng.random() < source.repair_rate:
             if source.backup_risk is not None:
                 child.risk = source.backup_risk
+            else:
+                child.risk = source.risk
             if source.backup_trade_rate is not None:
                 child.trade_rate = source.backup_trade_rate
+            else:
+                child.trade_rate = source.trade_rate
         return child
 
     def mutate(self, rng: Random) -> "Genome":
@@ -80,6 +85,7 @@ class Agent:
     generation: int = 0
     born: int = 0
     alive: bool = True
+    parents: tuple[int, ...] = ()
 
     @property
     def risk(self) -> float:
@@ -133,10 +139,13 @@ class World:
                 resource_invest=p.resource*g.offspring_investment
                 if cash_invest<=0 or resource_invest<=0: continue
                 p.cash-=cash_invest; p.resource-=resource_invest
-                child=Agent(self.next_id,cash_invest,resource_invest,g.reproduce(self.rng, self.mode, tuple(a.genome for a in self.rng.sample([a for a in candidates if a.id != p.id], min(2, len(candidates)-1))) if self.mode in ('D','E') and len(candidates)>1 else ()),p.id,p.generation+1,self.tick)
+                partners = self.rng.sample([a for a in candidates if a.id != p.id], min(2, len(candidates)-1)) if self.mode in ("D", "E") and len(candidates)>1 else []
+                # Partners contribute genetic information, not capital, in this experimental model.
+                child_genome = g.reproduce(self.rng, self.mode, tuple(a.genome for a in partners))
+                child=Agent(self.next_id,cash_invest,resource_invest,child_genome,p.id,p.generation+1,self.tick,True,(p.id,)+tuple(a.id for a in partners))
                 self.next_id+=1; self.population.append(child)
                 self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
-                    genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
+                    parents=list(child.parents),genes=asdict(child.genome),investment={"cash":round(cash_invest,3),"resource":round(resource_invest,3)})
         self.tick+=1; self._record()
 
     def run(self,ticks:int)->None:
