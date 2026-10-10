@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from random import Random
 from statistics import mean
 from typing import Any
@@ -58,10 +58,13 @@ class Agent:
         return self.genome.risk
 
 class World:
-    def __init__(self, agents: int = 100, seed: int = 42, group: str = 'A', resource_model: str = 'baseline'):
+    def __init__(self, agents: int = 100, seed: int = 42, group: str = 'A', resource_model: str = 'baseline', inheritance_mode: str = 'normal'):
         if agents < 2: raise ValueError("agents must be >= 2")
         if resource_model not in ("baseline", "scaled", "abundant"):
             raise ValueError("Unknown resource model")
+        if inheritance_mode not in ("normal", "no_mutation", "no_inheritance"):
+            raise ValueError("Unknown inheritance mode")
+        self.inheritance_mode = inheritance_mode
         self.resource_model = resource_model
         self.initial_agents = agents
         self.config=ReproductionConfig(group)
@@ -118,7 +121,12 @@ class World:
                         continue
                     if pool:
                         partners.append(self.rng.choice(pool))
-                child_genome = offspring_genome([a.genome for a in partners], self.rng, self.config)
+                if self.inheritance_mode == 'no_mutation':
+                    child_genome = replace(p.genome)
+                elif self.inheritance_mode == 'no_inheritance':
+                    child_genome = Genome.founder(self.rng)
+                else:
+                    child_genome = offspring_genome([a.genome for a in partners], self.rng, self.config)
                 child=Agent(self.next_id,cash_invest,resource_invest,child_genome,p.id,p.generation+1,self.tick)
                 self.next_id+=1; self.population.append(child)
                 self._event("birth",agent=child.id,parent=p.id,generation=child.generation,
@@ -137,5 +145,5 @@ class World:
           "mean_reproduction_probability":round(mean([a.genome.reproduction_probability for a in living]),5) if living else 0.0})
 
     def snapshot(self)->dict[str,Any]:
-        return {"version":"0.5.0-experimental","group":self.config.mode,"resource_model":self.resource_model,"seed":self.seed,"tick":self.tick,"price":round(self.price,4),
+        return {"version":"0.5.0-experimental","group":self.config.mode,"resource_model":self.resource_model,"inheritance_mode":self.inheritance_mode,"seed":self.seed,"tick":self.tick,"price":round(self.price,4),
           "agents":[asdict(a) for a in self.population],"history":self.history,"events":self.events}
